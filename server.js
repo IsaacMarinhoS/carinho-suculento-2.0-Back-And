@@ -7,7 +7,7 @@ const { Pool } = require("pg"); // Importando o módulo do PostgreSQL
 const cors = require("cors"); // Importando o CORS
 
 const app = express();
-const port = process.env.PORT || 3001;
+const port = process.env.PORT || 1000;
 
 // Configuração do Pool do PostgreSQL usando variáveis do .env
 const pool = new Pool({
