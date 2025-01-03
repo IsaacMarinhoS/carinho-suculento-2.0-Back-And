@@ -1,15 +1,15 @@
-require('dotenv').config(); // Carrega as variáveis de ambiente do arquivo .env
+require('dotenv').config(); // Carrega variáveis de ambiente
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
-const { Pool } = require("pg"); // Importando o módulo do PostgreSQL
-const cors = require("cors"); // Importando o CORS
+const { Pool } = require("pg");
+const cors = require("cors");
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Configuração do Pool do PostgreSQL usando variáveis do .env
+// Configuração do Pool PostgreSQL
 const pool = new Pool({
   user: process.env.DB_USER,
   host: process.env.DB_HOST,
@@ -18,25 +18,23 @@ const pool = new Pool({
   port: process.env.DB_PORT,
 });
 
+// Criar pasta "uploads" se não existir
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir);
   console.log('Pasta "uploads" criada com sucesso!');
 }
 
+// Configuração do armazenamento de arquivos com multer
 const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  }
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
 });
+const upload = multer({ storage });
 
-const upload = multer({ storage: storage });
-
-app.use(express.json()); // Permite o uso de JSON no corpo da requisição
-app.use(cors()); // Permite todas as origens por padrão
+// Middleware
+app.use(express.json());
+app.use(cors());
 
 // Rota para obter as fotos
 app.get("/photos", async (req, res) => {
@@ -45,7 +43,7 @@ app.get("/photos", async (req, res) => {
     const photos = result.rows.map(photo => ({
       id: photo.id,
       src: `http://localhost:${port}/uploads/${photo.file_name}`,
-      category: photo.category, // Inclui a categoria na resposta
+      category: photo.category,
     }));
     res.json(photos);
   } catch (err) {
@@ -55,15 +53,12 @@ app.get("/photos", async (req, res) => {
 
 // Rota para enviar uma foto
 app.post("/photos", upload.single("image"), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).send("Nenhuma imagem foi enviada.");
-  }
+  if (!req.file) return res.status(400).send("Nenhuma imagem foi enviada.");
 
   const { filename } = req.file;
-  const { category } = req.body; // Obtém a categoria da requisição
+  const { category } = req.body;
 
   try {
-    // Insere a foto e a categoria no banco de dados
     const result = await pool.query(
       'INSERT INTO photos (file_name, category) VALUES ($1, $2) RETURNING *',
       [filename, category]
@@ -73,7 +68,7 @@ app.post("/photos", upload.single("image"), async (req, res) => {
     res.json({
       id: newPhoto.id,
       src: `http://localhost:${port}/uploads/${newPhoto.file_name}`,
-      category: newPhoto.category, // Inclui a categoria na resposta
+      category: newPhoto.category,
     });
   } catch (err) {
     res.status(500).send("Erro ao salvar a foto no banco de dados.");
@@ -88,15 +83,11 @@ app.delete("/photos/:id", async (req, res) => {
     const result = await pool.query('SELECT file_name FROM photos WHERE id = $1', [id]);
     const photo = result.rows[0];
 
-    if (!photo) {
-      return res.status(404).send("Foto não encontrada.");
-    }
+    if (!photo) return res.status(404).send("Foto não encontrada.");
 
     const filePath = path.join(uploadsDir, photo.file_name);
     fs.unlink(filePath, async (err) => {
-      if (err) {
-        return res.status(500).send("Erro ao deletar a foto.");
-      }
+      if (err) return res.status(500).send("Erro ao deletar a foto.");
 
       await pool.query('DELETE FROM photos WHERE id = $1', [id]);
       res.sendStatus(200);
@@ -106,9 +97,10 @@ app.delete("/photos/:id", async (req, res) => {
   }
 });
 
-// Servir as imagens da pasta "uploads"
+// Servir imagens da pasta "uploads"
 app.use("/uploads", express.static(uploadsDir));
 
+// Inicializar o servidor
 app.listen(port, () => {
   console.log(`Servidor rodando em http://localhost:${port}`);
 });
